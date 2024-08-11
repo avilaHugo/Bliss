@@ -7,48 +7,56 @@ function logger() {
 	    "${message}"
 }
 
-function get_spacer() {
-    #@ Args
-    local char="${1}"
-    local n="${2}"
-
+function flag_test_pass_or_fail() {
     #@ Locals 
-    local spacer=''
-    
-    for ((i=1; i <= "${n}"; i++)); do
-	spacer+="${char}"
-    done
-    
-    echo "${spacer}"
+    declare -I test_name
+    declare -I test_return_code
+    local passed_massage="PASSED: ${test_name}"
+    local failed_massage="FAILED: ${test_name}"
+
+    [[ "${test_name}" == *\:\:pass\:\:* ]] \
+	&& [[ "${test_return_code}" -eq 0 ]] \
+	&& { echo "${passed_massage}"; return 0; }
+
+    [[ "${test_name}" == *\:\:fail\:\:* ]] \
+	&& [[ ! "${test_return_code}" -eq 0 ]] \
+	&& { echo "${passed_massage}"; return 0; }
+
+    echo "${failed_massage}"
+    return 1
 }
 
 function test_executor() {
     #@ Args
     local test_name="${1}"
+    local test_code
 
     #@ Locals
-    declare -i test_return_code
+    declare -i test_return_code=$("${test_name}"; echo "${?}")
 
-    logger "TEST (${test_name}): starting ..."
-    ("${test_name}")
-    logger "TEST (${test_name}): ended with code >>> ${?} <<<."
+    flag_test_pass_or_fail
 }
 
 ####### Tests
-function test::pass::parser() {
+function test::pass::pass() {
     return 0
 }
 
-function test::error::parser() {
+function test::fail::pass() {
     return 1
 }
 
 ######
 
 function main() {
+    #@ locals 
     declare -a capture_tests
+    local spacer=$(spacer=''; for _ in {1..100}; do spacer+='='; done; echo "${spacer}")
+    declare -i all_return_codes
+
+    #@ loop
     local function_name
-    local spacer=$(get_spacer '=' 100)
+    local test_case
 
     # Collect tests
     while IFS=' ' read -r _ _ function_name ;do
@@ -56,9 +64,20 @@ function main() {
 	capture_tests+=( "${function_name}" )
     done < <(declare -F)
 
-    for test_case in "${capture_tests}";do
+    echo "${spacer}"
+    for test_case in "${capture_tests[@]}";do
 	test_executor "${test_case}"
-    done
+	all_return_codes+=${?}
+    done 
+    echo "${spacer}"
+
+    (( all_return_codes > 0 )) && {
+	logger 'No BUENO, some tests failed :('
+	return 1
+    }
+
+    logger 'All cool bro all test passed !'
+    return 0
 }
 
 [[ "${BASH_SOURCE[0]}" == "${0}" ]] && main

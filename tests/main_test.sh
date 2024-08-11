@@ -1,5 +1,28 @@
 #!/usr/bin/env bash
 
+. "${BLISS_MAIN_FILE}"
+
+### UTILS
+function array_is_equal() {
+    #@ Args
+    declare -n ref_a=${1}
+    declare -n ref_b=${2}
+
+    # Return early if lengths don't match
+    [[ ! "${#ref_a[@]}" -eq "${#ref_b[@]}" ]] && return 1
+
+    # Check each element
+    for ((i=0; i<"${#ref_a[@]}"; i++));do
+	[[ ! "${ref_a[${i}]}" == "${ref_b[${i}]}" ]] && {
+	    echo 'ARRAY DIFF -> ITEM['"${i}"']: "'"${ref_a[${i}]}"'" != "'"${ref_b[${i}]}"'"'
+	    return 1
+	}
+    done
+
+    return 0
+}
+###
+
 function logger() {
     local message="${*}"
     printf '%(%Y-%m-%dT%H:%M:%S%z)T | %s\n' \
@@ -32,24 +55,30 @@ function test_executor() {
     local test_code
 
     #@ Locals
-    declare -i test_return_code=$("${test_name}"; echo "${?}")
+    declare -i test_return_code
+
+    (${test_name})
+    test_return_code="${?}"
 
     flag_test_pass_or_fail
 }
 
 ####### Tests
-function test::pass::pass() {
-    return 0
-}
+function test::pass::paser() {
+    local input_program='
+			(+(+ 1 22)       (+ 333 444))
+		 '
+    local expected_token_arr=( '(' '+' '(' '+' '1' '22' ')' '(' '+' '333' '444' ')' ')' )
 
-function test::fail::pass() {
-    return 1
+    local result_token_arr=($(bliss::parse "${input_program}"))
+
+    array_is_equal expected_token_arr result_token_arr
 }
 
 ######
 
 function main() {
-    #@ locals 
+    #@ locals
     declare -a capture_tests
     local spacer=$(spacer=''; for _ in {1..100}; do spacer+='='; done; echo "${spacer}")
     declare -i all_return_codes

@@ -1,5 +1,8 @@
-#+TITLE: **Bliss**: **B**ash **Lis**~~p~~**s** interpreter
+#+TITLE: Bliss: Bash Lisp interpreter
 #+AUTHOR: Hugo Ávila
+
+* Etymology
+- *B* ash *Lis* +p+ *s*
 
 
 

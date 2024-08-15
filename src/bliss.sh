@@ -40,12 +40,33 @@ function bliss::stack() {
     
 }
 
-
 function bliss::add() {
-    local a="${1}"; shift
-    local b="${1}"; shift
+    #@ args
+    # ---
+    declare -i result="${1}"; shift
 
-    echo "$(( a + b ))"
+    #@ locals
+    declare -i i
+    for i; do
+	result+="${i}"
+    done
+
+    echo "${result}"
+}
+
+function bliss::sub() {
+    #@ args
+    # ---
+    declare -i result="${1}"; shift
+
+    #@ locals
+    declare -i i
+
+   for i; do
+	result=$((result - i))
+    done
+
+    echo "${result}"
 }
 
 function bliss::map() {
@@ -75,8 +96,21 @@ function bliss::get_base_context() {
 }
 
 function bliss::eval() {
-    local token="${1}"
-    local environment="${2}"
+    local environment="${1}"; shift
+    local syn="${1}"; shift
+
+    # Numbers
+    [[ "${syn}" =~ [[:digit]]+ ]] && {
+	echo "${syn}"
+	return 0
+    }
+
+    # Env
+    [[ "${syn}" =~ [[:digit]]+ ]] && {
+	echo "${syn}"
+	return 0
+    }
+
 }
 
 function bliss::zip() {
@@ -112,28 +146,52 @@ function bliss::enumerate() {
     for ((i=start_from; i<"${#_ref[@]}"; i++));do
 	echo "${i}" "${_ref[${i}]}"
     done
-    
 }
 
-declare -A stack
-# program=($(bliss::parse '(+ 1 2 (- 2 1) (+ 1 1))'))
-program=($(bliss::parse '(+ 1 2 (- 2 1 ()) (+ 1 1))'))
-
-printf '%s\n' "${parens_loc[@]}"
-
-declare -i curr_level=0
-
-# for ((i=0; i<"${#program[@]}"; i++));do
-#     char="${program[$i]}"
+function bliss::filter() {
+    #@ args
+    local callable="${1}"; shift
+    local -n _ref="${1}"; shift
     
-#     [[ "${char}" == '(' ]] && {
-# 	echo "${curr_level}" "${char}" oi
-# 	curr_level=$((curr_level + 1))
-#     }
+    #@ locals
+    bliss::map "${callable}" "${_ref[@]}"
+}
 
-#     [[ "${char}" == ')' ]] && {
-# 	curr_level=$((curr_level - 1))
-# 	echo "${curr_level}" "${char}"
-#     }
-# done
+bliss::pop() {
+    local -n _ref="${1?}"; shift
+    local _index="${1?}"; shift
 
+    # TODO (Hugo Ávila): my initial ideia was to echo
+    # the removed item, but i could not make the variable
+    # scope work like this:
+    # echo $(pop array -1)
+    # Find a way to do this.
+    # echo "$_ref"
+
+    unset '_ref[${_index}]'
+}
+
+program=($(bliss::parse '(+ 1 2 (- 2 1 () ((())) ) (+ 1 1) ((())))'))
+
+declare -a open_parens
+
+declare -A BLISS_ENVIRONMENT
+
+BLISS_ENVIRONMENT['+']='bliss::add'
+BLISS_ENVIRONMENT['-']='bliss::sub'
+
+while read -r _INDEX _CHAR;do
+
+    [[ "${_CHAR}" == '(' ]] && {
+	open_parens+=("${_INDEX}")
+    }
+
+    [[ "${_CHAR}" == ')' ]] && {
+	start="${open_parens[-1]}"
+	take=$(( "${_INDEX}" - start + 1 ))
+	bliss::pop open_parens -1
+    }
+    
+done < <(bliss::enumerate program)
+
+echo "${program[@]}"

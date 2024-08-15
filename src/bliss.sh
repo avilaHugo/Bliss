@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# set -euo pipefail
+
 function bliss::parse() {
     #@ args
     local program="${*}"
@@ -8,6 +10,10 @@ function bliss::parse() {
     local char
     local _atom
 
+    # # Lets adding an extra enclosing parens
+    # # to allow evaluation without parens
+    # program="(${program})"
+    
     # Padding parens
     program="${program//\(/' ( '}"
     program="${program//\)/' ) '}"
@@ -34,49 +40,100 @@ function bliss::stack() {
     
 }
 
-function bliss::eval() {
-    local token="${1}"
-    local environment="${2}"
 
-    # Lets check if is num: [1, 0.1, -1, ]
-    [[ "${token}" ]] &&
+function bliss::add() {
+    local a="${1}"; shift
+    local b="${1}"; shift
+
+    echo "$(( a + b ))"
 }
 
-function bliss::Env() {
-    declare -A env_vars
+function bliss::map() {
+    #@ args
+    local callable="${1}"; shift
 
-    # Basic math
-    env_vars['+']='bliss::bc::add'
-    env_vars['-']='bliss::bc::sub'
-    env_vars['/']='bliss::bc::div'
-    env_vars['*']='bliss::bc::mult'
-    env_vars['add']='bliss::bc::add'
-    env_vars['sub']='bliss::bc::sub'
-    env_vars['div']='bliss::bc::div'
-    env_vars['mult']='bliss::bc::mult'    
+    #@ locals
+    local _item
+
+    for _item in "${@}";do
+	# TODO (Hugo Ávila): I don't like this eval implementation
+	# It allows some ugly arbritary code execution. Meybe add
+	# a type check or something here.
+	eval "${callable}"  "${_item}"
+    done
+}
+
+function bliss::get_base_context() {
+    #@ args
+    local -n array_ref="${1}"; shift
+
+    # Add primitive function here 
+    array_ref['add']='bliss::add'
+    array_ref['+']='bliss::add'
+
     
 }
 
-function bliss::bc::add() {
-    local a="${1}"
-    local b="${2}"
-    bc "${a} + ${b}"
+function bliss::eval() {
+    local token="${1}"
+    local environment="${2}"
 }
 
-function bliss::bc::sub() {
-    local a="${1}"
-    local b="${2}"
-    bc "${a} - ${b}"
+function bliss::zip() {
+    #@ locals
+    local _refs
+    declare -a row
+    declare -i length
+
+    # Here we are looping every ref name
+    # and creating a inside ref so zip
+    # will work for any size of arrays not only two.
+    for _refs in "${@}";do
+	local -n "in_${_refs}=${_refs}"
+    done
+
+    eval length='${#in_'"${1}"'[@]}'
+
+    for ((i=0; i<"${length}"; i++));do
+	row=()
+	for _refs in "${@}";do
+	    eval row+=('"${in_'"${_refs}"'['"${i}"']}"')
+	done
+	echo "${row[@]}"
+    done
 }
 
-function bliss::bc::div() {
-    local a="${1}"
-    local b="${2}"
-    bc "${a} / ${b}"
+function bliss::enumerate() {
+    #@ Args
+    declare -r -n _ref="${1}"; shift
+    declare -r -i start_from="${1:-0}"; shift
+
+    #@ locals
+    for ((i=start_from; i<"${#_ref[@]}"; i++));do
+	echo "${i}" "${_ref[${i}]}"
+    done
+    
 }
 
-function bliss::bc::mult() {
-    local a="${1}"
-    local b="${2}"
-    bc "${a} * ${b}"
-}
+declare -A stack
+# program=($(bliss::parse '(+ 1 2 (- 2 1) (+ 1 1))'))
+program=($(bliss::parse '(+ 1 2 (- 2 1 ()) (+ 1 1))'))
+
+printf '%s\n' "${parens_loc[@]}"
+
+declare -i curr_level=0
+
+# for ((i=0; i<"${#program[@]}"; i++));do
+#     char="${program[$i]}"
+    
+#     [[ "${char}" == '(' ]] && {
+# 	echo "${curr_level}" "${char}" oi
+# 	curr_level=$((curr_level + 1))
+#     }
+
+#     [[ "${char}" == ')' ]] && {
+# 	curr_level=$((curr_level - 1))
+# 	echo "${curr_level}" "${char}"
+#     }
+# done
+
